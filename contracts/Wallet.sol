@@ -16,7 +16,7 @@ contract wallet{
         string message;
     }
 
-    constructor() public payable{
+    constructor() payable{
         owner = msg.sender;
         balance_at[owner] = msg.value;
     }
@@ -30,7 +30,12 @@ contract wallet{
         return history[i].message;
     }
 
+    function noOfTransactions() public view returns (uint256){
+        return history.length;
+    }
+
     function sendMoney(address receiver, uint amt) public payable{
+        require(receiver != msg.sender, "error: an address can't send value to itself");
         require(amt <= balance_at[msg.sender], "error: insufficient funds in account");
 
         balance_at[msg.sender] -= amt;
