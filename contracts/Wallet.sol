@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 contract wallet{
     address  public owner;
     Transaction[] history;
-    mapping(address=>uint) balance_at;
 
     struct Transaction{
         address sender;
@@ -18,14 +17,30 @@ contract wallet{
 
     constructor() payable{
         owner = msg.sender;
-        balance_at[owner] = msg.value;
+        logTransaction(msg.sender, address(this), msg.value, block.timestamp);
     }
 
-    // modifier onlyOwner(){
-    //     require(msg.sender == owner, "error: only the owner is allowed to call this function");
-    //     _;
-    // }
+    modifier onlyOwner(){
+        require(msg.sender == owner, "error: only the owner is allowed to call this function");
+        _;
+    }
 
+    receive() external payable{
+        //contract receives funds from any other address(including owner) == DEPOSIT
+        require(msg.value <= msg.sender.balance, "error: insufficient funds in account");
+        logTransaction(msg.sender, address(this), msg.value, block.timestamp);
+    }
+    
+    function logTransaction(address sender, address receiver, uint amt, uint time) private{
+
+        //adding to logs
+        string memory sender_addr = Strings.toHexString(uint256(uint160(sender)));
+        string memory receiver_addr = Strings.toHexString(uint256(uint160(receiver)));
+        string memory message = string(abi.encodePacked(sender_addr," sent an amount of ", 
+                                Strings.toString(amt)," to ", receiver_addr," at ", Strings.toString(time*1000), " seconds"));
+        Transaction memory tr = Transaction(sender, receiver, amt, time, message);
+        history.push(tr);
+    }
     function getHistory(uint i) public view returns (string memory){
         return history[i].message;
     }
@@ -34,25 +49,26 @@ contract wallet{
         return history.length;
     }
 
-    function sendMoney(address receiver, uint amt) public payable{
+    function transferAmount(address receiver, uint amt) public payable onlyOwner{   //== TRANSFER 
         require(receiver != msg.sender, "error: an address can't send value to itself");
-        require(amt <= balance_at[msg.sender], "error: insufficient funds in account");
+        require(amt <= address(this).balance, "error: insufficient funds in account");
 
-        balance_at[msg.sender] -= amt;
-        balance_at[receiver] += amt;
-        
-        //adding to logs
-        uint time = block.timestamp;
-        string memory sender_addr = Strings.toHexString(uint256(uint160(msg.sender)), 20);
-        string memory receiver_addr = Strings.toHexString(uint256(uint160(receiver)), 20);
-        string memory message = string(abi.encodePacked(sender_addr," sent an amount of ", 
-                                Strings.toString(amt)," to ", receiver_addr," at ", Strings.toString(time*1000), " seconds"));
-        Transaction memory tr = Transaction(msg.sender, receiver, amt, time, message);
-        history.push(tr);
+        payable(receiver).transfer(amt);
+
+        logTransaction(address(this), receiver, amt, block.timestamp);
     } 
 
-    function checkBalance() public view returns(uint){
-        return balance_at[msg.sender];
+    function widthdrawAmount(uint amt) public onlyOwner{    // == WIDTHDRAW
+        require(amt <= address(this).balance, "error: insufficient funds in account");
+
+        payable(msg.sender).transfer(amt);
+        logTransaction(address(this), msg.sender, amt, block.timestamp);
     }
+
+    function checkBalance() public view onlyOwner returns(uint){
+        return address(this).balance;
+    }
+
+
 
 }
